@@ -81,6 +81,19 @@ type DB struct {
 	closeC chan struct{}
 	closed uint32
 	closer io.Closer
+
+	///mutlti index
+	buf     []byte            // a buffer to write to
+	keys    *btree.BTree      // a tree of all item ordered by key
+	exps    *btree.BTree      // a tree of items ordered by expiration
+	idxs    map[string]*index // the index trees.
+	exmgr   bool              // indicates that expires manager is running.
+	flushes int               // a count of the number of disk flushes
+	closed  bool              // set when the database has been closed
+
+	persist   bool // do we write to disk
+	shrinking bool // when an aof shrink is in-process.
+	lastaofsz int  // the size of the last shrink aof size
 }
 
 func openDB(s *session) (*DB, error) {
@@ -109,6 +122,9 @@ func openDB(s *session) (*DB, error) {
 		compErrSetC: make(chan error),
 		// Close
 		closeC: make(chan struct{}),
+		keys:   btree.New(btreeDegrees, nil),
+		exps:   btree.New(btreeDegrees, &exctx{db}),
+		idxs:   make(map[string]*index),
 	}
 
 	// Read-only mode.
@@ -1099,6 +1115,6 @@ func (db *DB) Close() error {
 
 	// Clear memdbs.
 	db.clearMems()
-
+	db.keys, db.exps, db.idxs = nil, nil, nil
 	return err
 }
