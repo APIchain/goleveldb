@@ -17,15 +17,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
-	"github.com/syndtr/goleveldb/leveldb/journal"
-	"github.com/syndtr/goleveldb/leveldb/memdb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/syndtr/goleveldb/leveldb/table"
-	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/bottos-project/goleveldb/leveldb/errors"
+	"github.com/bottos-project/goleveldb/leveldb/iterator"
+	"github.com/bottos-project/goleveldb/leveldb/journal"
+	"github.com/bottos-project/goleveldb/leveldb/memdb"
+	"github.com/bottos-project/goleveldb/leveldb/opt"
+	"github.com/bottos-project/goleveldb/leveldb/storage"
+	"github.com/bottos-project/goleveldb/leveldb/table"
+	"github.com/bottos-project/goleveldb/leveldb/util"
+
+	"github.com/tidwall/btree"
 )
+
+const btreeDegrees = 64
 
 // DB is a LevelDB database.
 type DB struct {
@@ -86,19 +90,23 @@ type DB struct {
 	buf     []byte            // a buffer to write to
 	keys    *btree.BTree      // a tree of all item ordered by key
 	exps    *btree.BTree      // a tree of items ordered by expiration
-	idxs    map[string]*index // the index trees.
+	idxs    map[string]*Index // the index trees.
 	exmgr   bool              // indicates that expires manager is running.
 	flushes int               // a count of the number of disk flushes
-	closed  bool              // set when the database has been closed
+	//closed  bool              // set when the database has been closed
 
 	persist   bool // do we write to disk
 	shrinking bool // when an aof shrink is in-process.
 	lastaofsz int  // the size of the last shrink aof size
 }
+type exctx struct {
+	db *DB
+}
 
 func openDB(s *session) (*DB, error) {
 	s.log("db@open opening")
 	start := time.Now()
+	dbtmp := &DB{}
 	db := &DB{
 		s: s,
 		// Initial sequence
@@ -123,8 +131,8 @@ func openDB(s *session) (*DB, error) {
 		// Close
 		closeC: make(chan struct{}),
 		keys:   btree.New(btreeDegrees, nil),
-		exps:   btree.New(btreeDegrees, &exctx{db}),
-		idxs:   make(map[string]*index),
+		exps:   btree.New(btreeDegrees, &exctx{dbtmp}),
+		idxs:   make(map[string]*Index),
 	}
 
 	// Read-only mode.
