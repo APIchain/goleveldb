@@ -94,6 +94,7 @@ type DB struct {
 	exmgr   bool              // indicates that expires manager is running.
 	flushes int               // a count of the number of disk flushes
 	//closed  bool              // set when the database has been closed
+	mu sync.RWMutex
 
 	persist   bool // do we write to disk
 	shrinking bool // when an aof shrink is in-process.

@@ -22,9 +22,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 package leveldb
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/tidwall/btree"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/grect"
 	"github.com/tidwall/match"
 	"github.com/tidwall/rtree"
 )
@@ -108,4 +111,121 @@ func (idx *Index) rebuild() {
 		}
 		return true
 	})
+}
+
+// Rect is helper function that returns a string representation
+// of a rect. IndexRect() is the reverse function and can be used
+// to generate a rect from a string.
+func Rect(min, max []float64) string {
+	r := grect.Rect{Min: min, Max: max}
+	return r.String()
+}
+
+// Point is a helper function that converts a series of float64s
+// to a rectangle for a spatial index.
+func Point(coords ...float64) string {
+	return Rect(coords, coords)
+}
+
+// IndexRect is a helper function that converts string to a rect.
+// Rect() is the reverse function and can be used to generate a string
+// from a rect.
+func IndexRect(a string) (min, max []float64) {
+	r := grect.Get(a)
+	return r.Min, r.Max
+}
+
+// IndexString is a helper function that return true if 'a' is less than 'b'.
+// This is a case-insensitive comparison. Use the IndexBinary() for comparing
+// case-sensitive strings.
+func IndexString(a, b string) bool {
+	for i := 0; i < len(a) && i < len(b); i++ {
+		if a[i] >= 'A' && a[i] <= 'Z' {
+			if b[i] >= 'A' && b[i] <= 'Z' {
+				// both are uppercase, do nothing
+				if a[i] < b[i] {
+					return true
+				} else if a[i] > b[i] {
+					return false
+				}
+			} else {
+				// a is uppercase, convert a to lowercase
+				if a[i]+32 < b[i] {
+					return true
+				} else if a[i]+32 > b[i] {
+					return false
+				}
+			}
+		} else if b[i] >= 'A' && b[i] <= 'Z' {
+			// b is uppercase, convert b to lowercase
+			if a[i] < b[i]+32 {
+				return true
+			} else if a[i] > b[i]+32 {
+				return false
+			}
+		} else {
+			// neither are uppercase
+			if a[i] < b[i] {
+				return true
+			} else if a[i] > b[i] {
+				return false
+			}
+		}
+	}
+	return len(a) < len(b)
+}
+
+// IndexBinary is a helper function that returns true if 'a' is less than 'b'.
+// This compares the raw binary of the string.
+func IndexBinary(a, b string) bool {
+	return a < b
+}
+
+// IndexInt is a helper function that returns true if 'a' is less than 'b'.
+func IndexInt(a, b string) bool {
+	ia, _ := strconv.ParseInt(a, 10, 64)
+	ib, _ := strconv.ParseInt(b, 10, 64)
+	return ia < ib
+}
+
+// IndexUint is a helper function that returns true if 'a' is less than 'b'.
+// This compares uint64s that are added to the database using the
+// Uint() conversion function.
+func IndexUint(a, b string) bool {
+	ia, _ := strconv.ParseUint(a, 10, 64)
+	ib, _ := strconv.ParseUint(b, 10, 64)
+	return ia < ib
+}
+
+// IndexFloat is a helper function that returns true if 'a' is less than 'b'.
+// This compares float64s that are added to the database using the
+// Float() conversion function.
+func IndexFloat(a, b string) bool {
+	ia, _ := strconv.ParseFloat(a, 64)
+	ib, _ := strconv.ParseFloat(b, 64)
+	return ia < ib
+}
+
+// IndexJSON provides for the ability to create an index on any JSON field.
+// When the field is a string, the comparison will be case-insensitive.
+// It returns a helper function used by CreateIndex.
+func IndexJSON(path string) func(a, b string) bool {
+	return func(a, b string) bool {
+		return gjson.Get(a, path).Less(gjson.Get(b, path), false)
+	}
+}
+
+// IndexJSONCaseSensitive provides for the ability to create an index on
+// any JSON field.
+// When the field is a string, the comparison will be case-sensitive.
+// It returns a helper function used by CreateIndex.
+func IndexJSONCaseSensitive(path string) func(a, b string) bool {
+	return func(a, b string) bool {
+		return gjson.Get(a, path).Less(gjson.Get(b, path), true)
+	}
+}
+
+// Desc is a helper function that changes the order of an index.
+func Desc(less func(a, b string) bool) func(a, b string) bool {
+	return func(a, b string) bool { return less(b, a) }
 }

@@ -32,13 +32,13 @@ import (
 	"github.com/tidwall/btree"
 )
 
-type dbItemOpts struct {
+type DbItemOpts struct {
 	ex   bool      // does this item expire?
 	exat time.Time // when does this item expire?
 }
 type DbItem struct {
 	key, val string      // the binary key and value
-	opts     *dbItemOpts // optional meta information
+	opts     *DbItemOpts // optional meta information
 	keyless  bool        // keyless item for scanning
 }
 
